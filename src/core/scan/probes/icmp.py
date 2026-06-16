@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 
+from src.core.scan.constants import snap_ttl
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import IcmpResult
 
@@ -27,7 +28,7 @@ async def run(ctx: ProbeContext) -> IcmpResult:
     return IcmpResult(
         responded=True,
         ttl_received=ttl,
-        ttl_estimated=_estimate_ttl(ttl),
+        ttl_estimated=snap_ttl(ttl),
         rtt_ms=float(rtt_match.group(1)) if rtt_match else None,
     )
 
@@ -67,12 +68,3 @@ async def _ping(ip: str, wait_ms: int) -> str | None:
         raise
     return stdout.decode(errors="ignore")
 
-
-def _estimate_ttl(received: int) -> int:
-    if received <= 32:
-        return 32
-    if received <= 64:
-        return 64
-    if received <= 128:
-        return 128
-    return 255

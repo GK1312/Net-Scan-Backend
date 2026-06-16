@@ -3,20 +3,10 @@ from __future__ import annotations
 import asyncio
 import struct
 
+from src.core.scan.constants import SMB, SMB2_DIALECTS
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import SmbResult
 from src.core.scan.os_hints import win_version_name
-
-SMB_PORT = 445
-
-_DIALECTS: dict[int, str] = {
-    0x0202: "SMB 2.0.2",
-    0x0210: "SMB 2.1",
-    0x0300: "SMB 3.0",
-    0x0302: "SMB 3.0.2",
-    0x0311: "SMB 3.1.1",
-    0x02FF: "SMB 2.x",
-}
 
 
 def _smb2_header(command: int, msg_id: int) -> bytes:
@@ -84,7 +74,7 @@ async def run(ctx: ProbeContext) -> SmbResult:
     timeout = ctx.timeouts.tcp_connect_timeout
     try:
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(ctx.ip, SMB_PORT), timeout=timeout
+            asyncio.open_connection(ctx.ip, SMB), timeout=timeout
         )
     except (OSError, asyncio.TimeoutError):
         return SmbResult()  # 445 not open -> SMB not probed
@@ -110,7 +100,7 @@ async def _negotiate(
         return result
     result.responded = True
     dialect_val = struct.unpack_from("<H", resp, 72)[0]
-    result.dialect = _DIALECTS.get(dialect_val, f"0x{dialect_val:04x}")
+    result.dialect = SMB2_DIALECTS.get(dialect_val, f"0x{dialect_val:04x}")
     if len(resp) >= 92:
         guid = resp[76:92]
         result.server_guid = guid.hex()

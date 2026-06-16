@@ -2,24 +2,22 @@ from __future__ import annotations
 
 import asyncio
 
+from src.core.scan.constants import VMWARE_AUTHD, VMWARE_AUTHD_BANNER_BYTES
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import VmwareAuthdResult
-
-VMWARE_AUTHD_PORT = 902
-_BANNER_BYTES = 256
 
 
 async def run(ctx: ProbeContext) -> VmwareAuthdResult:
     timeout = ctx.timeouts.tcp_connect_timeout
     try:
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(ctx.ip, VMWARE_AUTHD_PORT), timeout=timeout
+            asyncio.open_connection(ctx.ip, VMWARE_AUTHD), timeout=timeout
         )
     except (OSError, asyncio.TimeoutError):
         return VmwareAuthdResult()
 
     try:
-        raw = await asyncio.wait_for(reader.read(_BANNER_BYTES), timeout=timeout)
+        raw = await asyncio.wait_for(reader.read(VMWARE_AUTHD_BANNER_BYTES), timeout=timeout)
     except (OSError, asyncio.TimeoutError):
         return VmwareAuthdResult()
     finally:

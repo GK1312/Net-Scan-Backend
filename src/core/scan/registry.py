@@ -5,6 +5,10 @@ from typing import Awaitable, Callable
 
 from pydantic import BaseModel
 
+from src.core.scan.constants import (
+    GATE_SMB, GATE_SSH, GATE_TLS, GATE_HTTP, GATE_UPNP,
+    GATE_RDP, GATE_VMWARE_AUTHD, GATE_MQTT, GATE_IPP, GATE_RTSP, GATE_TELNET,
+)
 from src.core.scan.context import ProbeContext
 from src.core.scan.probes import (
     arp,
@@ -42,15 +46,15 @@ PROBES: dict[str, ProbeSpec] = {
     "snmp": ProbeSpec(snmp.run),
     "netbios": ProbeSpec(netbios.run),
     "mdns": ProbeSpec(mdns.run),
-    "smb": ProbeSpec(smb.run, frozenset({445})),
-    "ssh": ProbeSpec(ssh.run, frozenset({22})),
-    "tls_443": ProbeSpec(tls_443.run, frozenset({443})),
-    "http": ProbeSpec(http.run, frozenset({80, 443, 8080, 8443})),
-    "upnp": ProbeSpec(upnp.run, frozenset({80, 443, 8080, 8443})),
-    "rdp": ProbeSpec(rdp.run, frozenset({3389})),
-    "vmware_authd": ProbeSpec(vmware_authd.run, frozenset({902})),
-    "mqtt": ProbeSpec(mqtt.run, frozenset({1883})),
-    "ipp": ProbeSpec(ipp.run, frozenset({631, 9100})),
-    "rtsp": ProbeSpec(rtsp.run, frozenset({554})),
-    "telnet": ProbeSpec(telnet.run, frozenset({23})),
+    "smb": ProbeSpec(smb.run, GATE_SMB),
+    "ssh": ProbeSpec(ssh.run, GATE_SSH),
+    "tls_443": ProbeSpec(tls_443.run, GATE_TLS),
+    "http": ProbeSpec(http.run, GATE_HTTP),
+    "upnp": ProbeSpec(upnp.run, GATE_UPNP),
+    "rdp": ProbeSpec(rdp.run, GATE_RDP),
+    "vmware_authd": ProbeSpec(vmware_authd.run, GATE_VMWARE_AUTHD),
+    "mqtt": ProbeSpec(mqtt.run, GATE_MQTT),
+    "ipp": ProbeSpec(ipp.run, GATE_IPP),
+    "rtsp": ProbeSpec(rtsp.run, GATE_RTSP),
+    "telnet": ProbeSpec(telnet.run, GATE_TELNET),
 }

@@ -2,24 +2,22 @@ from __future__ import annotations
 
 import asyncio
 
+from src.core.scan.constants import SSH, SSH_BANNER_BYTES
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import SshResult
-
-SSH_PORT = 22
-_BANNER_BYTES = 256
 
 
 async def run(ctx: ProbeContext) -> SshResult:
     timeout = ctx.timeouts.tcp_connect_timeout
     try:
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(ctx.ip, SSH_PORT), timeout=timeout
+            asyncio.open_connection(ctx.ip, SSH), timeout=timeout
         )
     except (OSError, asyncio.TimeoutError):
         return SshResult()
 
     try:
-        raw = await asyncio.wait_for(reader.read(_BANNER_BYTES), timeout=timeout)
+        raw = await asyncio.wait_for(reader.read(SSH_BANNER_BYTES), timeout=timeout)
     except (OSError, asyncio.TimeoutError):
         return SshResult()
     finally:

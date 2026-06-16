@@ -4,17 +4,20 @@ import asyncio
 import re
 import urllib.request
 
+from src.core.scan.constants import (
+    IPP,
+    JETDIRECT,
+    HTTP_USER_AGENT,
+    IPP_HTTP_BODY_BYTES,
+    PJL_REPLY_BYTES,
+    PJL_INFO_ID_COMMAND,
+    PJL_ID_REPLY_PATTERN,
+)
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import IppResult
 
-IPP_PORT = 631
-JETDIRECT_PORT = 9100
-_USER_AGENT = "Mozilla/5.0"
-_HTTP_BODY_BYTES = 4096
-_PJL_REPLY_BYTES = 512
 _TITLE_RE = re.compile(r"<title[^>]*>([^<]{1,100})</title>", re.IGNORECASE)
-_PJL_INFO = b"\x1b%-12345X@PJL INFO ID\r\n\x1b%-12345X"
-_PJL_ID_RE = re.compile(r"@PJL INFO ID\s*\r?\n(.+)")
+_PJL_ID_RE = re.compile(PJL_ID_REPLY_PATTERN)
 
 
 async def run(ctx: ProbeContext) -> IppResult:
@@ -25,11 +28,11 @@ async def run(ctx: ProbeContext) -> IppResult:
     printer_name: str | None = None
     make_model: str | None = None
 
-    if IPP_PORT in open_ports:
+    if IPP in open_ports:
         ok, printer_name = await asyncio.to_thread(_fetch_ipp, ctx.ip, timeout)
         responded = responded or ok
 
-    if JETDIRECT_PORT in open_ports:
+    if JETDIRECT in open_ports:
         ok, make_model = await _fetch_jetdirect(ctx.ip, timeout)
         responded = responded or ok
 
@@ -40,11 +43,11 @@ async def run(ctx: ProbeContext) -> IppResult:
 
 def _fetch_ipp(ip: str, timeout: float) -> tuple[bool, str | None]:
     request = urllib.request.Request(
-        f"http://{ip}:{IPP_PORT}/", headers={"User-Agent": _USER_AGENT}
+        f"http://{ip}:{IPP}/", headers={"User-Agent": HTTP_USER_AGENT}
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = response.read(_HTTP_BODY_BYTES).decode(errors="ignore")
+            body = response.read(IPP_HTTP_BODY_BYTES).decode(errors="ignore")
     except Exception:
         return False, None
     match = _TITLE_RE.search(body)
@@ -55,15 +58,15 @@ async def _fetch_jetdirect(ip: str, timeout: float) -> tuple[bool, str | None]:
     """Send a PJL INFO ID and parse the make/model from the reply."""
     try:
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(ip, JETDIRECT_PORT), timeout=timeout
+            asyncio.open_connection(ip, JETDIRECT), timeout=timeout
         )
     except (OSError, asyncio.TimeoutError):
         return False, None
 
     try:
-        writer.write(_PJL_INFO)
+        writer.write(PJL_INFO_ID_COMMAND)
         await writer.drain()
-        raw = await asyncio.wait_for(reader.read(_PJL_REPLY_BYTES), timeout=timeout)
+        raw = await asyncio.wait_for(reader.read(PJL_REPLY_BYTES), timeout=timeout)
     except (OSError, asyncio.TimeoutError):
         return False, None
     finally:

@@ -4,11 +4,9 @@ import asyncio
 import ssl
 from typing import Any
 
+from src.core.scan.constants import HTTPS, TLS_OID_COMMON_NAME
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import Tls443Result
-
-TLS_PORT = 443
-_COMMON_NAME_OID = b"\x55\x04\x03"
 
 
 async def run(ctx: ProbeContext) -> Tls443Result:
@@ -36,7 +34,7 @@ async def _fetch_cert(
 ) -> tuple[dict[str, Any] | None, bytes | None]:
     try:
         _, writer = await asyncio.wait_for(
-            asyncio.open_connection(ip, TLS_PORT, ssl=context, server_hostname=ip),
+            asyncio.open_connection(ip, HTTPS, ssl=context, server_hostname=ip),
             timeout=timeout,
         )
     except (OSError, ssl.SSLError, asyncio.TimeoutError):
@@ -78,10 +76,10 @@ def _rdn_value(rdns: Any, key: str) -> str | None:
 def _der_common_name(der: bytes | None) -> str | None:
     if not der:
         return None
-    index = der.rfind(_COMMON_NAME_OID)
+    index = der.rfind(TLS_OID_COMMON_NAME)
     if index < 0:
         return None
-    pos = index + len(_COMMON_NAME_OID)
+    pos = index + len(TLS_OID_COMMON_NAME)
     if pos + 2 > len(der):
         return None
     length = der[pos + 1]

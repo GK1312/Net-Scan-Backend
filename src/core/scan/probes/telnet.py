@@ -2,25 +2,22 @@ from __future__ import annotations
 
 import asyncio
 
+from src.core.scan.constants import TELNET, TELNET_BANNER_BYTES, TELNET_BANNER_MAX
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import TelnetResult
-
-TELNET_PORT = 23
-_BANNER_BYTES = 512
-_BANNER_MAX = 300
 
 
 async def run(ctx: ProbeContext) -> TelnetResult:
     timeout = ctx.timeouts.tcp_connect_timeout
     try:
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(ctx.ip, TELNET_PORT), timeout=timeout
+            asyncio.open_connection(ctx.ip, TELNET), timeout=timeout
         )
     except (OSError, asyncio.TimeoutError):
         return TelnetResult()
 
     try:
-        raw = await asyncio.wait_for(reader.read(_BANNER_BYTES), timeout=timeout)
+        raw = await asyncio.wait_for(reader.read(TELNET_BANNER_BYTES), timeout=timeout)
     except (OSError, asyncio.TimeoutError):
         return TelnetResult()
     finally:
@@ -33,4 +30,4 @@ async def run(ctx: ProbeContext) -> TelnetResult:
     banner = raw.decode("latin-1", errors="ignore").strip()
     if not banner:
         return TelnetResult()
-    return TelnetResult(responded=True, banner=banner[:_BANNER_MAX])
+    return TelnetResult(responded=True, banner=banner[:TELNET_BANNER_MAX])

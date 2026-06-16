@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 
+from src.core.scan.constants import ARP_RESOLVE_DELAY_S, ARP_LOCAL_CACHE_TTL_S
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import ArpResult
 from src.core.scan.oui import is_randomized_mac, lookup_oui, normalize_mac
@@ -16,8 +17,6 @@ _MAC_RE = re.compile(
     r"[:\-][\da-fA-F]{2}[:\-][\da-fA-F]{2}[:\-][\da-fA-F]{2})"
 )
 _IP_RE = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
-_ARP_RESOLVE_DELAY = 0.15
-_LOCAL_TTL = 30.0
 _local_cache: tuple[float, dict[str, str]] | None = None
 _local_lock = asyncio.Lock()
 
@@ -30,7 +29,7 @@ async def run(ctx: ProbeContext) -> ArpResult:
         mac = local[ip]
     elif _on_link(ip, local):
         _poke(ip)
-        await asyncio.sleep(_ARP_RESOLVE_DELAY)
+        await asyncio.sleep(ARP_RESOLVE_DELAY_S)
         mac = await asyncio.to_thread(_read_arp_entry, ip)
     else:
         return ArpResult()
@@ -86,10 +85,10 @@ def _read_arp_entry(ip: str) -> str | None:
 
 async def _local_macs() -> dict[str, str]:
     global _local_cache
-    if _local_cache and time.monotonic() - _local_cache[0] < _LOCAL_TTL:
+    if _local_cache and time.monotonic() - _local_cache[0] < ARP_LOCAL_CACHE_TTL_S:
         return _local_cache[1]
     async with _local_lock:
-        if _local_cache and time.monotonic() - _local_cache[0] < _LOCAL_TTL:
+        if _local_cache and time.monotonic() - _local_cache[0] < ARP_LOCAL_CACHE_TTL_S:
             return _local_cache[1]
         table = await asyncio.to_thread(_read_local_macs)
         _local_cache = (time.monotonic(), table)

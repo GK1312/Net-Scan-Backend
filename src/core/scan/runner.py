@@ -33,13 +33,6 @@ async def scan_ip(ip: str, settings: Settings | None = None) -> dict:
 
 
 async def _run_probes(ctx: ProbeContext) -> dict[str, BaseModel]:
-    """Two-phase, port-gated execution:
-
-    Phase 1 runs the ungated probes (discovery + UDP services), including the TCP
-    port scan. Phase 2 then runs each TCP service probe only if one of its gate
-    ports is open — so smb/http/ssh/etc. never connect to a closed port. Skipped
-    probes are simply absent from the result; `Probes` fills their default.
-    """
     timeout = ctx.timeouts.ping_timeout
     results: dict[str, BaseModel] = {}
 
@@ -48,10 +41,9 @@ async def _run_probes(ctx: ProbeContext) -> dict[str, BaseModel]:
 
     tcp = results.get("tcp_ports")
     open_ports = set(tcp.open) if tcp is not None else set()
+    ctx.shared["open_ports"] = open_ports
     gated = {
-        n: s
-        for n, s in PROBES.items()
-        if s.gate_ports and (s.gate_ports & open_ports)
+        n: s for n, s in PROBES.items() if s.gate_ports and (s.gate_ports & open_ports)
     }
     results.update(await _gather(gated, ctx, timeout))
     return results

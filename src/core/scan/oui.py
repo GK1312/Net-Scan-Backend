@@ -103,6 +103,7 @@ OUI_TABLE: dict[str, tuple[str, str]] = {
     "C4:E9:84": ("TP-Link", "wifi_ap"),
     "50:D4:F7": ("TP-Link", "wifi_ap"),
     "30:DE:4B": ("TP-Link", "wifi_ap"),
+    "3C:52:A1": ("TP-Link", "wifi_ap"),
     # ── Netgear ───────────────────────────────────────────────────────────
     "00:09:5B": ("Netgear", "wifi_ap"),
     "00:14:6C": ("Netgear", "wifi_ap"),

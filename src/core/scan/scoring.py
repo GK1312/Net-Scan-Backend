@@ -24,7 +24,7 @@ _PORT_VOTES: dict[int, tuple[str, float]] = {
     445: ("windows", 2.0),
     3389: ("windows", 2.5),
     5985: ("windows", 1.5),
-    22: ("linux", 1.5),
+    22: ("linux", 1.0),
     548: ("macos", 2.0),
     9100: ("printer", 3.0),
     631: ("printer", 2.5),
@@ -399,8 +399,10 @@ def _score_banners(probes, scores, log, evidence) -> None:
     if probes.ssh.responded and probes.ssh.banner:
         banner = probes.ssh.banner.lower()
         rule["ssh"] = probes.ssh.banner
-        if "ubuntu" in banner or "debian" in banner or "openssh" in banner:
-            _add(scores, log, "linux", 1.5, "banner", "ssh banner", probes.ssh.banner)
+        if "ubuntu" in banner or "debian" in banner:
+            _add(scores, log, "linux", 1.5, "banner", "ssh distro banner", probes.ssh.banner)
+        elif "openssh" in banner:
+            _add(scores, log, "linux", 0.5, "banner", "ssh banner", probes.ssh.banner)
         if "dropbear" in banner:
             _add(scores, log, "iot", 1.0, "banner", "dropbear ssh", probes.ssh.banner)
         if "cisco" in banner:
@@ -684,10 +686,10 @@ def _platform_specific_hint(probes, platform: str) -> str | None:
             return _upnp_ident(probes.upnp)[:80]
         if snmp.sys_descr:
             return snmp.sys_descr[:80]
-        if probes.http.title:
-            return probes.http.title[:80]
         if probes.arp.manufacturer:
             return f"{probes.arp.manufacturer} Router / AP"
+        if probes.http.title:
+            return probes.http.title[:80]
         return None
     return None
 

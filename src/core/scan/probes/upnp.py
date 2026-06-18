@@ -27,7 +27,7 @@ async def run(ctx: ProbeContext) -> UpnpResult:
     open_ports: set[int] = ctx.shared.get("open_ports", set())
     timeout = ctx.timeouts.tcp_connect_timeout
 
-    targets: list[tuple[str, str]] = []  # (scheme, url) in preference order
+    targets: list[tuple[str, str]] = []
     for scheme, port in _CANDIDATES:
         if port not in open_ports:
             continue

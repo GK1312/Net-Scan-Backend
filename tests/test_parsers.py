@@ -7,18 +7,15 @@ from src.core.scan.probes import mdns, netbios, snmp
 
 
 def test_win_version_name_shared_build_names_client_and_server():
-    # NTLMSSP can't tell client from server for a shared build, so name both.
     assert win_version_name(6, 2, 9200) == "Windows 8 / Server 2012"
     assert win_version_name(10, 0, 14393) == "Windows 10 1607 / Server 2016"
     assert win_version_name(10, 0, 26100) == "Windows 11 24H2 / Server 2025"
 
 
 def test_win_version_name_legacy_build_carries_service_pack():
-    # Exact build gives SP/RTM granularity that (major, minor) alone can't.
     assert win_version_name(6, 1, 7601) == "Windows 7 SP1 / Server 2008 R2 SP1"
     assert win_version_name(6, 1, 7600) == "Windows 7 / Server 2008 R2 (RTM)"
     assert win_version_name(5, 1, 2600) == "Windows XP"
-    # Unknown legacy build falls back to the (major, minor) name.
     assert win_version_name(6, 1, 7777) == "Windows 7 / Server 2008 R2"
 
 
@@ -93,9 +90,6 @@ def test_mdns_non_response_returns_empty():
 def test_mdns_reverse_query_ipv4_only():
     assert mdns._reverse_ptr_query("192.168.1.5") is not None
     assert mdns._reverse_ptr_query("fe80::1") is None
-
-
-# --- NetBIOS NBSTAT name-table parse ---
 
 
 def test_netbios_parses_name_table_and_mac():

@@ -34,7 +34,7 @@ async def test_open_connection_bounds_concurrency(monkeypatch):
     )
     await asyncio.gather(*(ctx.open_connection(p, 1.0) for p in range(20)))
 
-    assert peak <= 3  # never more than the limiter allows in flight
+    assert peak <= 3
 
 
 async def test_open_connection_unbounded_without_limiter(monkeypatch):

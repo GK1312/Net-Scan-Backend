@@ -9,19 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class PhaseTimeouts(BaseModel):
     ping_timeout: float = 3.0
     tcp_connect_timeout: float = 2.0
-    # The port scan only needs open/closed/filtered, not a data exchange, so it
-    # uses a shorter connect timeout than the service probes. This is the main
-    # per-host cost (every host waits it out on its slowest filtered port); an
-    # open port on a LAN answers in <10ms, so this only bounds the "filtered"
-    # verdict. The gate-port recovery pass re-probes at tcp_connect_timeout.
     port_connect_timeout: float = 1.0
-    # Per-attempt SMB read budget. SMB does connect + two NTLMSSP round-trips and
-    # retries once (see SMB_ATTEMPTS), so the effective ceiling is ~2x this.
     smb_timeout: float = 4.0
-    # The phase-1 port scan fans out ~20 connects (filtered ports each burn
-    # tcp_connect_timeout); it needs more headroom than the generic per-probe
-    # budget or it gets cancelled wholesale under load -> no ports -> every gated
-    # probe (SMB, etc.) is skipped.
     port_scan_timeout: float = 5.0
 
 
@@ -49,11 +38,6 @@ class WorkerSettings(BaseModel):
     batch_size: int = 2_000
     chunk_size: int = 1_000
     max_connections: int = 25
-    # Worker-wide ceiling on concurrent outbound TCP connects (0 = unlimited).
-    # The port scan fans out ~20 connects per IP, so under big scans N_IPs x 20
-    # connects can storm the local stack and genuinely-open ports time out
-    # (mis-reported as filtered). Opt-in: set this ABOVE the worst-case live load
-    # — too low and slow dead-host connects hold every slot and starve live hosts.
     max_concurrent_connections: int = 0
     rate_limit_per_pod: int = 1_000
     flush_interval_seconds: float = 1.0

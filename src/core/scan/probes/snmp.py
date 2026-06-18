@@ -14,7 +14,6 @@ SYS_DESCR = "1.3.6.1.2.1.1.1.0"
 SYS_OBJECT_ID = "1.3.6.1.2.1.1.2.0"
 SYS_NAME = "1.3.6.1.2.1.1.5.0"
 
-# BER tags
 _OCTET_STRING = 0x04
 _OBJECT_ID = 0x06
 

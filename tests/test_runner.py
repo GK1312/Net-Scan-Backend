@@ -23,8 +23,6 @@ def test_probe_timeout_gives_smb_and_port_scan_more_budget():
     ctx = ProbeContext(ip="10.0.0.1", timeouts=timeouts)
     default = timeouts.ping_timeout
 
-    # gated probes that get skipped when the port scan is cancelled must outlive
-    # the generic per-probe cap
     assert runner._probe_timeout("smb", ctx, default) == 4.0 * runner.SMB_ATTEMPTS
     assert runner._probe_timeout("tcp_ports", ctx, default) == 5.0
     assert runner._probe_timeout("icmp", ctx, default) == default
@@ -34,7 +32,6 @@ async def test_recover_gate_ports_promotes_filtered_445(monkeypatch):
     from src.core.scan import runner as runner_mod
     from src.core.scan.models import TcpPortsResult
 
-    # 445 (gate for smb) and 7547 (not a gate) both came back filtered.
     results = {
         "tcp_ports": TcpPortsResult(
             probed=[445, 5985, 7547], open=[5985], filtered=[445, 7547]
@@ -42,16 +39,16 @@ async def test_recover_gate_ports_promotes_filtered_445(monkeypatch):
     }
 
     async def fake_probe_ports(ctx, ports, timeout):
-        assert set(ports) == {445}  # only gate ports get re-probed, not 7547
+        assert set(ports) == {445}
         return {445: "open"}
 
     monkeypatch.setattr(runner_mod, "probe_ports", fake_probe_ports)
     await runner_mod._recover_gate_ports(_ctx(set()), results)
 
     tcp = results["tcp_ports"]
-    assert 445 in tcp.open  # recovered -> feeds gating + scoring
+    assert 445 in tcp.open
     assert 445 not in tcp.filtered
-    assert 7547 in tcp.filtered  # non-gate port left alone
+    assert 7547 in tcp.filtered
 
 
 async def test_recover_gate_ports_noop_when_still_filtered(monkeypatch):

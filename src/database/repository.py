@@ -50,7 +50,6 @@ async def fetch_job(db: Querier, job_id: UUID | str) -> asyncpg.Record | None:
 async def fetch_results_after(
     db: Querier, job_id: UUID | str, cursor: int, limit: int = 500
 ) -> list[asyncpg.Record]:
-    """Results with id strictly greater than ``cursor`` (the streaming tail read)."""
     return await db.fetch(
         """
         SELECT id, document
@@ -68,7 +67,6 @@ async def fetch_results_after(
 async def fetch_results_page(
     db: Querier, job_id: UUID | str, limit: int, offset: int
 ) -> list[asyncpg.Record]:
-    """Offset-paginated snapshot read for GET /ping/{job_id}."""
     return await db.fetch(
         """
         SELECT id, document
@@ -86,10 +84,6 @@ async def fetch_results_page(
 async def insert_results(
     conn: asyncpg.Connection, job_id: UUID | str, rows: Sequence[ResultRow]
 ) -> int:
-    """Insert fingerprint rows for one job, skipping any (job_id, ip) that already
-    exists. Returns the count of *newly* inserted rows so callers only advance
-    processed_count for results that are genuinely new. Documents are passed as
-    JSON text and cast to jsonb per row."""
     if not rows:
         return 0
     inserted = await conn.fetch(
@@ -120,7 +114,6 @@ async def insert_results(
 async def increment_processed(
     conn: asyncpg.Connection, job_id: UUID | str, count: int
 ) -> asyncpg.Record:
-    """Atomically bump processed_count and flip status to completed when done."""
     return await conn.fetchrow(
         """
         UPDATE jobs
@@ -142,13 +135,11 @@ async def increment_processed(
 
 
 async def notify_results(conn: asyncpg.Connection, job_id: UUID | str) -> None:
-    """Ring the doorbell: tell listening stream endpoints new rows exist for this job."""
     channel = get_settings().database.notify_channel
     await conn.execute("SELECT pg_notify($1, $2)", channel, str(job_id))
 
 
 def serialize_result(record: asyncpg.Record) -> dict[str, Any]:
-    # The full scan_ip() document (jsonb decoded to a dict by the connection codec).
     return record["document"]
 
 

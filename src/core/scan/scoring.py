@@ -37,10 +37,6 @@ _PORT_VOTES: dict[int, tuple[str, float]] = {
 
 _CONFIDENCE_SATURATION_SCORE = 5.0
 
-# Some signals are proof, not a vote: a host either speaks the protocol or it
-# doesn't. When the winning platform has one, floor its confidence here so that
-# co-occurring generic signals (e.g. ESXi's own SSH/TTL voting "linux") can't
-# dilute the share of a positively-identified host.
 _DEFINITIVE_CONFIDENCE = 90.0
 
 _TLS_VENDOR_KEYWORDS: tuple[tuple[str, str], ...] = (
@@ -61,6 +57,7 @@ _TLS_VENDOR_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("ubiquiti", "wifi_ap"),
     ("unifi", "wifi_ap"),
 )
+
 _UPNP_VENDOR_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("netgear", "wifi_ap"),
     ("tp-link", "wifi_ap"),
@@ -102,8 +99,6 @@ _UPNP_VENDOR_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("hewlett", "printer"),
 )
 
-# HTTP Server-header firmware/brand -> platform (router firmware, camera vendors,
-# printer brands). Generic apache/nginx/iis stay handled inline (weaker votes).
 _HTTP_SERVER_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("openwrt", "wifi_ap"),
     ("dd-wrt", "wifi_ap"),
@@ -133,7 +128,6 @@ _HTTP_SERVER_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("hp-chaiseri", "printer"),
 )
 
-# HTTP <title> keyword -> platform.
 _HTTP_TITLE_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("camera", "iot"),
     ("ip cam", "iot"),
@@ -166,12 +160,8 @@ _HTTP_TITLE_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("lexmark", "printer"),
 )
 
-# Strong device fingerprints found in a TLS cert (subject/issuer) or reverse-DNS
-# hostname. A match is treated as definitive: it both votes the platform and
-# supplies a specific os_hint, since these identities are vendor-unique.
-# (keyword [lowercased], platform, os_hint)
 _DEVICE_IDENTITY: tuple[tuple[str, str, str], ...] = (
-    ("rilselfcert", "wifi_ap", "Jio ISP Gateway"),  # Reliance Jio self-signed cert
+    ("rilselfcert", "wifi_ap", "Jio ISP Gateway"),
     ("reliance", "wifi_ap", "Jio ISP Gateway"),
     ("jio", "wifi_ap", "Jio ISP Gateway"),
 )
@@ -201,6 +191,7 @@ _UBUNTU_VERSIONS: dict[str, str] = {
     "9.9": "Ubuntu 25.04",
     "10.0": "Ubuntu 25.04",
 }
+
 _DEBIAN_VERSIONS: dict[str, str] = {
     "6.7": "Debian 8 (jessie)",
     "7.4": "Debian 9 (stretch)",
@@ -209,6 +200,7 @@ _DEBIAN_VERSIONS: dict[str, str] = {
     "9.2": "Debian 12 (bookworm)",
     "9.9": "Debian 13 (trixie)",
 }
+
 _FEDORA_VERSIONS: dict[str, str] = {
     "8.8": "Fedora 35",
     "9.0": "Fedora 36/37",
@@ -305,22 +297,22 @@ def score(ip: str, probes: Probes) -> Scoring:
     os_hint = _resolve_os_hint(probes, platform, smb_hint, ttl_hint, identity)
 
     hostname = (
-        (probes.smb.computer_name or None)
-        or (probes.netbios.computer_name or None)
-        or (probes.mdns.hostname or None)
-        or (probes.snmp.sys_name or None)
-        or (probes.revdns.hostname or None)
+            (probes.smb.computer_name or None)
+            or (probes.netbios.computer_name or None)
+            or (probes.mdns.hostname or None)
+            or (probes.snmp.sys_name or None)
+            or (probes.revdns.hostname or None)
     )
     return Scoring(evidence, log, scores, platform, confidence, os_hint, hostname)
 
 
 def build_classification(
-    ip: str, probes: Probes, scoring: Scoring, duration_ms: int
+        ip: str, probes: Probes, scoring: Scoring, duration_ms: int
 ) -> Classification:
     reachable = (
-        probes.icmp.responded
-        or bool(probes.tcp_ports.open)
-        or probes.arp.mac is not None
+            probes.icmp.responded
+            or bool(probes.tcp_ports.open)
+            or probes.arp.mac is not None
     )
     return Classification(
         ip=ip,
@@ -334,13 +326,13 @@ def build_classification(
 
 
 def _add(
-    scores: dict[str, float],
-    log: list[ScoreEntry],
-    platform: str,
-    delta: float,
-    signal: str,
-    reason: str,
-    value: object,
+        scores: dict[str, float],
+        log: list[ScoreEntry],
+        platform: str,
+        delta: float,
+        signal: str,
+        reason: str,
+        value: object,
 ) -> None:
     scores[platform] += delta
     log.append(
@@ -367,9 +359,6 @@ def _score_ttl(probes, scores, log, evidence) -> str | None:
         inference, os_hint = "windows", "Windows"
     elif ttl == 64:
         if probes.arp.randomized:
-            # A privacy/randomized MAC with a unix-like TTL (and typically no
-            # open ports) is characteristically a phone, not a Linux host. The
-            # generic linux/macos/iot spread is suppressed so it doesn't dilute.
             _add(scores, log, "mobile", 4.0, "ttl", "randomized MAC + TTL 64", ttl)
             inference = "mobile (randomized MAC)"
         else:
@@ -487,7 +476,7 @@ def _score_services(probes, scores, log, evidence) -> str | None:
 
     if probes.netbios.responded:
         rule["netbios"] = (
-            probes.netbios.computer_name or probes.netbios.domain or "responded"
+                probes.netbios.computer_name or probes.netbios.domain or "responded"
         )
         _add(
             scores,
@@ -505,7 +494,7 @@ def _score_services(probes, scores, log, evidence) -> str | None:
         rule["snmp"] = snmp.sys_descr or "responded"
         _add(scores, log, "network_device", 1.0, "service", "snmp agent", rule["snmp"])
         if any(
-            v in descr for v in ("cisco", "mikrotik", "juniper", "routeros", "arista")
+                v in descr for v in ("cisco", "mikrotik", "juniper", "routeros", "arista")
         ):
             _add(
                 scores,
@@ -548,9 +537,6 @@ def _score_services(probes, scores, log, evidence) -> str | None:
         title = (http.title or "").lower()
         rule["http"] = http.server or http.title or "responded"
         if _vcenter_web_detected(probes):
-            # vCenter Server Appliance web UI (the "ID_VC_Welcome" landing-page
-            # token). VCSA is a Linux (Photon OS) appliance, so this votes linux;
-            # the vCenter/Photon detail is surfaced via os_hint.
             _add(scores, log, "linux", 2.0, "service", "vcenter web ui", rule["http"])
         else:
             srv_platform = _match_vendor(server, _HTTP_SERVER_KEYWORDS)
@@ -576,9 +562,9 @@ def _score_services(probes, scores, log, evidence) -> str | None:
     if probes.mdns.responded:
         rule["mdns"] = services or probes.mdns.hostname or "responded"
         if (
-            "_airplay" in services
-            or "_raop" in services
-            or "_companion-link" in services
+                "_airplay" in services
+                or "_raop" in services
+                or "_companion-link" in services
         ):
             _add(scores, log, "macos", 1.5, "service", "apple mdns", rule["mdns"])
         if "_ipp" in services or "_pdl-datastream" in services:
@@ -605,8 +591,6 @@ def _score_services(probes, scores, log, evidence) -> str | None:
 
 
 def _match_device_identity(probes) -> tuple[str, str] | None:
-    # Vendor-unique strings in the TLS cert (subject/issuer) or reverse-DNS
-    # hostname -> (platform, os_hint). Returns the first match.
     parts: list[str] = []
     tls = probes.tls_443
     if tls.responded:
@@ -623,9 +607,6 @@ def _match_device_identity(probes) -> tuple[str, str] | None:
 
 
 def _vcenter_web_detected(probes) -> bool:
-    # The vCenter Server Appliance web UI exposes localization tokens like
-    # "ID_VC_Welcome". Kept specific (not generic "vmware"/"vsphere") so a real
-    # ESXi host's web UI doesn't get mistaken for a Linux vCenter appliance.
     http = probes.http
     if not http.responded:
         return False
@@ -634,19 +615,17 @@ def _vcenter_web_detected(probes) -> bool:
 
 
 def _resolve_os_hint(
-    probes,
-    platform: str,
-    smb_hint: str | None,
-    ttl_hint: str | None,
-    identity: tuple[str, str] | None = None,
+        probes,
+        platform: str,
+        smb_hint: str | None,
+        ttl_hint: str | None,
+        identity: tuple[str, str] | None = None,
 ) -> str | None:
     if smb_hint:
         return smb_hint
     if identity:
         return identity[1]
     if _vcenter_web_detected(probes):
-        # vCenter Server Appliance runs on VMware Photon OS; the bare OpenSSH
-        # banner alone would otherwise misread this as RHEL 7.
         return "VMware vCenter Server Appliance (Photon OS)"
     if platform == "vmware_esxi":
         return _PLATFORM_OS_HINT["vmware_esxi"]
@@ -667,7 +646,6 @@ def _upnp_ident(upnp) -> str:
 
 
 def _platform_specific_hint(probes, platform: str) -> str | None:
-    # Per-platform os_hint refinement from the richest available probe field.
     open_ports = set(probes.tcp_ports.open)
     ssh = probes.ssh
     snmp = probes.snmp
@@ -737,7 +715,7 @@ def _snmp_enterprise_platform(sys_object_id: str | None) -> str | None:
     prefix = "1.3.6.1.4.1."
     if not sys_object_id or not sys_object_id.startswith(prefix):
         return None
-    pen = sys_object_id[len(prefix) :].split(".", 1)[0]
+    pen = sys_object_id[len(prefix):].split(".", 1)[0]
     return _SNMP_ENTERPRISE.get(pen)
 
 
@@ -765,7 +743,7 @@ def _score_oui(probes, scores, log, evidence) -> None:
 
 
 def _resolve_conflicts(
-    scores, platform, confidence, share, saturation, evidence
+        scores, platform, confidence, share, saturation, evidence
 ) -> None:
     ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     top = ranked[0]
@@ -782,11 +760,8 @@ def _resolve_conflicts(
 
 
 def _has_definitive_signal(probes, platform: str) -> bool:
-    # The vmware_authd handshake banner is unique to VMware hosts (the probe only
-    # marks `responded` when "vmware" appears in it), so it's proof of ESXi.
     if platform == "vmware_esxi" and probes.vmware_authd.responded:
         return True
-    # A vendor-unique cert/hostname fingerprint is likewise proof of identity.
     identity = _match_device_identity(probes)
     return identity is not None and identity[0] == platform
 

@@ -125,10 +125,6 @@ def test_os_hint_rhel_family_from_bare_openssh_version():
 
 
 def test_vcenter_appliance_stays_linux_with_vmware_hint():
-    # VMware vCenter Server Appliance (Photon OS): bare OpenSSH_7.4 reads as
-    # RHEL 7, but the vCenter web-UI title ("ID_VC_Welcome") identifies it. The
-    # appliance OS is Linux, so platform stays linux and os_hint carries the
-    # vCenter/Photon detail.
     probes = Probes(
         **{
             "icmp": {"responded": True, "ttl_received": 64, "ttl_estimated": 64},
@@ -143,8 +139,6 @@ def test_vcenter_appliance_stays_linux_with_vmware_hint():
 
 
 def test_esxi_authd_banner_floors_confidence_despite_linux_signals():
-    # Real ESXi host: vmware_authd banner is proof, but ESXi's own OpenSSH/port 22
-    # /TTL 64 vote linux and would otherwise dilute confidence to ~55%.
     probes = Probes(
         **{
             "icmp": {"responded": True, "ttl_received": 64, "ttl_estimated": 64},
@@ -176,8 +170,6 @@ def test_vmware_port_without_authd_is_not_floored():
 
 
 def test_jio_gateway_identified_from_tls_cert_and_hostname():
-    # Reliance Jio router: only TTL 64 votes (linux 1.0), but the RILSELFCERT
-    # cert + reliance.reliance hostname are a definitive vendor fingerprint.
     probes = Probes(
         **{
             "icmp": {"responded": True, "ttl_received": 64, "ttl_estimated": 64},
@@ -207,7 +199,6 @@ def test_randomized_mac_with_ttl_64_is_mobile():
 
 
 def test_ttl_64_without_randomized_mac_stays_linux():
-    # Non-randomized TTL 64 must still read as a generic unix host, not mobile.
     probes = Probes(
         **{
             "icmp": {"responded": True, "ttl_received": 64, "ttl_estimated": 64},

@@ -42,7 +42,6 @@ async def run(ctx: ProbeContext) -> TcpPortsResult:
 async def probe_ports(
     ctx: ProbeContext, ports: tuple[int, ...] | list[int], timeout: float
 ) -> dict[int, str]:
-    """Connect-scan each port concurrently, returning {port: open|closed|filtered}."""
     states = await asyncio.gather(*(_probe_port(ctx, p, timeout) for p in ports))
     return dict(zip(ports, states, strict=True))
 

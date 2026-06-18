@@ -36,14 +36,12 @@ class Worker:
         self.queue = QueueConnection(settings.queue)
         self.producer = JobProducer(self.queue)
         self._rate_limiter = RateLimiter(settings.worker.rate_limit_per_pod)
-        self._queue = None  # the declared aio-pika queue
+        self._queue = None
         self._consumer_tag: str | None = None
         self._stop = asyncio.Event()
         self._idle = asyncio.Event()
-        self._idle.set()  # idle until a batch is in flight
+        self._idle.set()
         self._inflight = 0
-        # Created in run() (must bind to the running loop): a process-wide ceiling
-        # on concurrent outbound connects shared across every IP/batch in flight.
         self._conn_limit: asyncio.Semaphore | None = None
 
     async def run(self) -> None:
@@ -93,7 +91,6 @@ class Worker:
             try:
                 loop.add_signal_handler(sig, self._stop.set)
             except (NotImplementedError, AttributeError, ValueError):
-                # Windows / unsupported loop: fall back to KeyboardInterrupt.
                 pass
 
     async def _shutdown(self) -> None:
@@ -170,7 +167,7 @@ class Worker:
             async with self.db.pool.acquire() as conn, conn.transaction():
                 await repository.increment_processed(conn, batch.job_id, len(batch.ips))
                 await repository.notify_results(conn, batch.job_id)
-        except Exception as exc:  # never let reconciliation failure requeue
+        except Exception as exc:
             print(f"worker: reconcile failed for job_id={batch.job_id}: {exc!r}")
 
     async def _process_batch(self, batch: BatchMessage) -> None:
@@ -204,7 +201,7 @@ class Worker:
             )
             try:
                 outcome = await asyncio.wait_for(results.get(), timeout=timeout)
-                if outcome is None:  # sentinel: probing finished, flush remainder
+                if outcome is None:
                     done = True
                 else:
                     buffer.append(outcome)

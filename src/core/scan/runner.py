@@ -13,18 +13,15 @@ from src.core.scan.probes.tcp_ports import probe_ports
 from src.core.scan.registry import PROBES, ProbeSpec
 from src.core.scan.scoring import Scoring, build_classification, score
 
-# Every port that gates a phase-2/3 probe. A connection storm can mis-report one
-# of these as "filtered" (timed out), which would skip the gated probe entirely,
-# so we re-probe just these once after the burst has drained.
 _GATE_PORTS: frozenset[int] = frozenset().union(
     *(spec.gate_ports for spec in PROBES.values())
 )
 
 
 async def scan_ip(
-    ip: str,
-    settings: Settings | None = None,
-    conn_limit: asyncio.Semaphore | None = None,
+        ip: str,
+        settings: Settings | None = None,
+        conn_limit: asyncio.Semaphore | None = None,
 ) -> dict:
     settings = settings or get_settings()
     ctx = ProbeContext(
@@ -47,9 +44,6 @@ async def scan_ip(
     if _unreachable(results, open_ports):
         return _finish(ip, results, start, unreachable=True)
 
-    # Rescue gate ports spuriously marked filtered under connection load. Only on
-    # a host that already shows an open port — re-probing on dead/idle hosts (the
-    # bulk of a subnet scan) just doubles the connect cost for nothing.
     if open_ports:
         await _recover_gate_ports(ctx, results)
         open_ports = set(tcp.open) if tcp is not None else set()
@@ -79,9 +73,6 @@ def _phase(phase: int, open_ports: set[int]) -> dict[str, ProbeSpec]:
 
 
 async def _recover_gate_ports(ctx: ProbeContext, results: dict[str, BaseModel]) -> None:
-    # Re-probe gate ports the first pass reported as filtered (likely timed out
-    # under the connect burst). Recovered ports are folded back into the scan's
-    # open set so they both gate phase-2 probes and feed scoring.
     tcp = results.get("tcp_ports")
     if tcp is None:
         return
@@ -107,10 +98,10 @@ def _unreachable(results: dict[str, BaseModel], open_ports: set[int]) -> bool:
 
 
 async def _enrich(
-    ctx: ProbeContext,
-    results: dict[str, BaseModel],
-    scoring: Scoring,
-    timeout: float,
+        ctx: ProbeContext,
+        results: dict[str, BaseModel],
+        scoring: Scoring,
+        timeout: float,
 ) -> dict[str, BaseModel]:
     pending = _enrichment_specs(ctx, results, scoring)
     if not pending:
@@ -119,7 +110,7 @@ async def _enrich(
 
 
 def _enrichment_specs(
-    ctx: ProbeContext, results: dict[str, BaseModel], scoring: Scoring
+        ctx: ProbeContext, results: dict[str, BaseModel], scoring: Scoring
 ) -> dict[str, ProbeSpec]:
     open_ports: set[int] = ctx.shared.get("open_ports", set())
     pending: dict[str, ProbeSpec] = {}
@@ -142,10 +133,10 @@ def _enrichment_specs(
 
 
 def _finish(
-    ip: str,
-    results: dict[str, BaseModel],
-    start: float,
-    unreachable: bool = False,
+        ip: str,
+        results: dict[str, BaseModel],
+        start: float,
+        unreachable: bool = False,
 ) -> dict:
     probes = Probes(**results)
     scoring = score(ip, probes)
@@ -167,7 +158,7 @@ def _finish(
 
 
 async def _gather(
-    specs: dict[str, ProbeSpec], ctx: ProbeContext, timeout: float
+        specs: dict[str, ProbeSpec], ctx: ProbeContext, timeout: float
 ) -> dict[str, BaseModel]:
     async def run_one(name: str, spec: ProbeSpec) -> tuple[str, BaseModel | None]:
         try:
@@ -181,13 +172,9 @@ async def _gather(
 
 
 def _probe_timeout(name: str, ctx: ProbeContext, default: float) -> float:
-    # SMB needs more than the generic per-probe budget (connect + two NTLMSSP
-    # round-trips) and retries once on a dropped handshake; the outer cap must
-    # cover every attempt's read timeout or a retry gets cancelled mid-flight.
     if name == "smb":
         return max(default, ctx.timeouts.smb_timeout * SMB_ATTEMPTS)
-    # The port scan gates every phase-2 probe; never let the generic per-probe
-    # cap cancel it (which would zero out the open-port set).
+    
     if name == "tcp_ports":
         return max(default, ctx.timeouts.port_scan_timeout)
     return default

@@ -77,7 +77,7 @@ async def _udp_query(ip: str, packet: bytes, timeout: float) -> bytes | None:
 
 def _dns_ptr_query(labels: list[bytes]) -> bytes:
     qname = b"".join(bytes([len(label)]) + label for label in labels) + b"\x00"
-    header = struct.pack("!HHHHHH", 0, 0, 1, 0, 0, 0)  # id, flags, qd=1, an/ns/ar=0
+    header = struct.pack("!HHHHHH", 0, 0, 1, 0, 0, 0)
     return header + qname + struct.pack("!HH", _PTR, _IN)
 
 
@@ -85,7 +85,7 @@ _SERVICE_ENUM_QUERY = _dns_ptr_query([b"_services", b"_dns-sd", b"_udp", b"local
 
 
 def _reverse_ptr_query(ip: str) -> bytes | None:
-    if ":" in ip or "." not in ip:  # IPv4 only
+    if ":" in ip or "." not in ip:
         return None
     rev = ".".join(reversed(ip.split("."))) + ".in-addr.arpa"
     return _dns_ptr_query([label.encode() for label in rev.split(".")])

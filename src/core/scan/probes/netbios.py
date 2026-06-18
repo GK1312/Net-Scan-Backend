@@ -57,11 +57,11 @@ def _parse(data: bytes) -> NetbiosResult:
     pos = data.find(b"\x00\x21\x00\x01", 50)
     if pos == -1:
         return NetbiosResult()
-    pos += 4  # past type + class
+    pos += 4
     if pos + 6 > len(data):
         return NetbiosResult()
-    pos += 4  # TTL
-    pos += 2  # RDLENGTH
+    pos += 4
+    pos += 2
     if pos >= len(data):
         return NetbiosResult()
 

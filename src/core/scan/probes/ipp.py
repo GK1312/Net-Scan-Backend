@@ -60,7 +60,6 @@ def _fetch_ipp(ip: str, timeout: float) -> tuple[bool, str | None]:
 
 
 async def _fetch_jetdirect(ip: str, timeout: float) -> tuple[bool, str | None]:
-    """Send a PJL INFO ID and parse the make/model from the reply."""
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(ip, JETDIRECT_PORT), timeout=timeout

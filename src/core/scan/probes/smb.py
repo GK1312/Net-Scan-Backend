@@ -8,8 +8,6 @@ from src.core.scan.models import SmbResult
 from src.core.scan.os_hints import win_version_name
 
 SMB_PORT = 445
-# One retry: SMB handshakes drop transiently (reset / lost packet) on busy hosts.
-# The runner sizes SMB's per-probe budget to cover SMB_ATTEMPTS reads.
 SMB_ATTEMPTS = 2
 
 _DIALECTS: dict[int, str] = {
@@ -89,10 +87,6 @@ async def run(ctx: ProbeContext) -> SmbResult:
     result = SmbResult()
     for _ in range(SMB_ATTEMPTS):
         result = await _attempt(ctx.ip, connect_timeout, read_timeout)
-        # Retry only a failed *connect* (transient). A successful connect is a
-        # terminal result whether or not SMB2 answered: a host that ignores the
-        # SMB2 negotiate (SMB1-only, e.g. XP/2003) won't answer on a retry either,
-        # and retrying would blow the per-probe time budget and lose the signal.
         if result.probed:
             break
     return result
@@ -104,7 +98,7 @@ async def _attempt(ip: str, connect_timeout: float, read_timeout: float) -> SmbR
             asyncio.open_connection(ip, SMB_PORT), timeout=connect_timeout
         )
     except (OSError, asyncio.TimeoutError):
-        return SmbResult()  # 445 unreachable this attempt -> a retry may still win
+        return SmbResult()
     try:
         return await _negotiate(reader, writer, read_timeout)
     finally:
@@ -144,18 +138,13 @@ async def _negotiate(
     if pos == -1:
         return result
     ntlmssp = resp[pos:]
-    # Must be a CHALLENGE (MessageType 2) with the fixed header through TargetInfo.
     if len(ntlmssp) < 48 or struct.unpack_from("<I", ntlmssp, 8)[0] != 2:
         return result
 
-    # AvPairs are located via the TargetInfo offset, so computer/domain parse
-    # whether or not the server included a version block.
     avs = _parse_avpairs(ntlmssp)
     result.computer_name = avs.get("dns_computer_name") or avs.get("computer_name")
     result.domain = avs.get("dns_domain") or avs.get("nb_domain")
 
-    # The version block at offset 48 is only meaningful if the server set
-    # NTLMSSP_NEGOTIATE_VERSION (0x02000000); otherwise those bytes are payload.
     flags = struct.unpack_from("<I", ntlmssp, 20)[0]
     if flags & 0x02000000 and len(ntlmssp) >= 56:
         major, minor = ntlmssp[48], ntlmssp[49]
@@ -164,8 +153,6 @@ async def _negotiate(
             result.os_version = f"{major}.{minor}.{build}"
             result.native_os = win_version_name(major, minor, build)
 
-    # Non-Windows SMB (Samba on Linux/Unix, most NAS appliances) sends no Windows
-    # version block and an all-zero ServerGUID -> label it from the Samba signal.
     if result.native_os is None and result.is_samba:
         result.native_os = "Samba (Linux/Unix)"
     return result

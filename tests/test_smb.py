@@ -16,30 +16,28 @@ async def test_smb_retries_once_on_failed_connect(monkeypatch):
     async def fake_attempt(ip, connect_timeout, read_timeout):
         calls["n"] += 1
         if calls["n"] == 1:
-            return SmbResult()  # connect failed (probed=False) -> transient
+            return SmbResult()
         return SmbResult(probed=True, responded=True, native_os="Windows 8 / Server 2012")
 
     monkeypatch.setattr(smb, "_attempt", fake_attempt)
     result = await smb.run(_ctx())
 
-    assert calls["n"] == 2  # retried after the failed connect
+    assert calls["n"] == 2
     assert result.responded
     assert result.native_os == "Windows 8 / Server 2012"
 
 
 async def test_smb_does_not_retry_when_connected_but_no_smb2(monkeypatch):
-    # SMB1-only host (XP/2003): connect succeeds, SMB2 negotiate ignored. This is
-    # terminal -> do NOT retry (retrying would blow the per-probe time budget).
     calls = {"n": 0}
 
     async def fake_attempt(ip, connect_timeout, read_timeout):
         calls["n"] += 1
-        return SmbResult(probed=True)  # connected, responded=False
+        return SmbResult(probed=True)
 
     monkeypatch.setattr(smb, "_attempt", fake_attempt)
     result = await smb.run(_ctx())
 
-    assert calls["n"] == 1  # connected once -> no retry
+    assert calls["n"] == 1
     assert result.probed
     assert not result.responded
 
@@ -54,7 +52,7 @@ async def test_smb_does_not_retry_after_success(monkeypatch):
     monkeypatch.setattr(smb, "_attempt", fake_attempt)
     result = await smb.run(_ctx())
 
-    assert calls["n"] == 1  # stopped on first success
+    assert calls["n"] == 1
     assert result.responded
 
 
@@ -63,7 +61,7 @@ async def test_smb_gives_up_after_max_attempts(monkeypatch):
 
     async def fake_attempt(ip, connect_timeout, read_timeout):
         calls["n"] += 1
-        return SmbResult()  # never responds
+        return SmbResult()
 
     monkeypatch.setattr(smb, "_attempt", fake_attempt)
     result = await smb.run(_ctx())

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import aio_pika
-from aio_pika.abc import AbstractRobustConnection, AbstractChannel, AbstractQueue
+from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
+
 from src.config import QueueSettings
 
 

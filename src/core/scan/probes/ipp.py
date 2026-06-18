@@ -21,21 +21,29 @@ async def run(ctx: ProbeContext) -> IppResult:
     open_ports: set[int] = ctx.shared.get("open_ports", set())
     timeout = ctx.timeouts.tcp_connect_timeout
 
-    responded = False
-    printer_name: str | None = None
-    make_model: str | None = None
-
-    if IPP_PORT in open_ports:
-        ok, printer_name = await asyncio.to_thread(_fetch_ipp, ctx.ip, timeout)
-        responded = responded or ok
-
-    if JETDIRECT_PORT in open_ports:
-        ok, make_model = await _fetch_jetdirect(ctx.ip, timeout)
-        responded = responded or ok
+    ipp_task = (
+        asyncio.to_thread(_fetch_ipp, ctx.ip, timeout)
+        if IPP_PORT in open_ports
+        else _none_pair()
+    )
+    jetdirect_task = (
+        _fetch_jetdirect(ctx.ip, timeout)
+        if JETDIRECT_PORT in open_ports
+        else _none_pair()
+    )
+    (ipp_ok, printer_name), (jd_ok, make_model) = await asyncio.gather(
+        ipp_task, jetdirect_task
+    )
 
     return IppResult(
-        responded=responded, printer_name=printer_name, make_model=make_model
+        responded=ipp_ok or jd_ok,
+        printer_name=printer_name,
+        make_model=make_model,
     )
+
+
+async def _none_pair() -> tuple[bool, str | None]:
+    return False, None
 
 
 def _fetch_ipp(ip: str, timeout: float) -> tuple[bool, str | None]:

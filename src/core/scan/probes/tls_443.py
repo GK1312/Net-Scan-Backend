@@ -12,11 +12,17 @@ _COMMON_NAME_OID = b"\x55\x04\x03"
 
 
 async def run(ctx: ProbeContext) -> Tls443Result:
-    timeout = ctx.timeouts.tcp_connect_timeout
+    handshake_timeout = min(
+        ctx.timeouts.tcp_connect_timeout, (ctx.timeouts.ping_timeout - 0.2) / 2
+    )
 
-    cert_dict, cert_der = await _fetch_cert(ctx.ip, _verifying_context(), timeout)
+    cert_dict, cert_der = await _fetch_cert(
+        ctx.ip, _verifying_context(), handshake_timeout
+    )
     if cert_dict is None and cert_der is None:
-        cert_dict, cert_der = await _fetch_cert(ctx.ip, _permissive_context(), timeout)
+        cert_dict, cert_der = await _fetch_cert(
+            ctx.ip, _permissive_context(), handshake_timeout
+        )
 
     if cert_dict is None and cert_der is None:
         return Tls443Result()

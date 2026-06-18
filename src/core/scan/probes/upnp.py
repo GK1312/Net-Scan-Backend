@@ -4,6 +4,7 @@ import asyncio
 import re
 import ssl
 import urllib.request
+from urllib.parse import urlsplit
 
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import UpnpResult
@@ -12,9 +13,6 @@ _CANDIDATES = (("http", 80), ("http", 8080), ("https", 443), ("https", 8443))
 _UPNP_PATHS = (
     "/description.xml",
     "/rootDesc.xml",
-    "/igd.xml",
-    "/setup.xml",
-    "/upnp/desc.html",
     "/",
 )
 _USER_AGENT = "Mozilla/5.0"
@@ -28,33 +26,34 @@ _TLS_CONTEXT.verify_mode = ssl.CERT_NONE
 async def run(ctx: ProbeContext) -> UpnpResult:
     open_ports: set[int] = ctx.shared.get("open_ports", set())
     timeout = ctx.timeouts.tcp_connect_timeout
+
+    targets: list[tuple[str, str]] = []  # (scheme, url) in preference order
     for scheme, port in _CANDIDATES:
         if port not in open_ports:
             continue
-        result = await asyncio.to_thread(
-            _fetch_description, ctx.ip, scheme, port, timeout
+        base = (
+            f"{scheme}://{ctx.ip}"
+            if port in (80, 443)
+            else f"{scheme}://{ctx.ip}:{port}"
         )
-        if result is not None:
-            return result
-    return UpnpResult()
+        targets.extend((scheme, base + path) for path in _UPNP_PATHS)
+    if not targets:
+        return UpnpResult()
 
-
-def _fetch_description(
-    ip: str, scheme: str, port: int, timeout: float
-) -> UpnpResult | None:
-    base = f"{scheme}://{ip}" if port in (80, 443) else f"{scheme}://{ip}:{port}"
-    for path in _UPNP_PATHS:
-        body = _get(base + path, scheme, timeout)
+    bodies = await asyncio.gather(
+        *(asyncio.to_thread(_get, url, scheme, timeout) for scheme, url in targets)
+    )
+    for (_, url), body in zip(targets, bodies, strict=True):
         if body is None or ("<root" not in body and "<device" not in body):
             continue
         return UpnpResult(
             responded=True,
-            location=path,
+            location=urlsplit(url).path,
             friendly_name=_tag(body, "friendlyName"),
             manufacturer=_tag(body, "manufacturer"),
             model_name=_tag(body, "modelName"),
         )
-    return None
+    return UpnpResult()
 
 
 def _get(url: str, scheme: str, timeout: float) -> str | None:

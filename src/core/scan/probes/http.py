@@ -23,10 +23,14 @@ _TLS_CONTEXT.verify_mode = ssl.CERT_NONE
 async def run(ctx: ProbeContext) -> HttpResult:
     open_ports: set[int] = ctx.shared.get("open_ports", set())
     timeout = ctx.timeouts.tcp_connect_timeout
-    for scheme, port in _CANDIDATES:
-        if port not in open_ports:
-            continue
-        result = await asyncio.to_thread(_fetch, ctx.ip, scheme, port, timeout)
+    candidates = [(s, p) for s, p in _CANDIDATES if p in open_ports]
+    if not candidates:
+        return HttpResult()
+
+    results = await asyncio.gather(
+        *(asyncio.to_thread(_fetch, ctx.ip, s, p, timeout) for s, p in candidates)
+    )
+    for result in results:
         if result is not None:
             return result
     return HttpResult()

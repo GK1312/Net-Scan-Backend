@@ -3,27 +3,30 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from typing import AsyncIterator
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from src.queue.schemas import BatchMessage
-from src.exceptions import ValidationError
-from src.config import get_settings
+from src.api.deps import enforce_rate_limit, require_api_key
 from src.api.schemas import (
-    PingResponse,
-    PingRequest,
     PingJobStatusResponse,
+    PingRequest,
+    PingResponse,
     ResultsPageRequest,
 )
+from src.config import get_settings
 from src.database import repository
-from src.utils.validators import expand_targets
+from src.exceptions import ValidationError
+from src.queue.schemas import BatchMessage
 from src.utils.helpers import chunk
+from src.utils.validators import expand_targets
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)]
+)
 
 
 @router.post("/ping", response_model=PingResponse)
@@ -100,7 +103,8 @@ async def stream_ping(job_id: UUID, http: Request) -> StreamingResponse:
         raise HTTPException(status_code=404, detail="job not found")
 
     last_event_id = http.headers.get("last-event-id")
-    generator = _result_event_stream(db, str(job_id), last_event_id)
+    dispatcher = http.app.state.notify
+    generator = _result_event_stream(db, dispatcher, str(job_id), last_event_id)
     return StreamingResponse(
         generator,
         media_type="text/event-stream",
@@ -118,53 +122,43 @@ def _sse(event: str, data: dict, event_id: int | None = None) -> str:
 
 
 async def _result_event_stream(
-        db, job_id: str, last_event_id: str | None
+        db, dispatcher, job_id: str, last_event_id: str | None
 ) -> AsyncIterator[str]:
     settings = get_settings()
 
     cursor = int(last_event_id) if last_event_id and last_event_id.isdigit() else 0
 
-    wakeup = asyncio.Event()
+    with dispatcher.subscribe(job_id) as wakeup:
+        while True:
+            wakeup.clear()
 
-    def on_notify(_conn, _pid, _channel, payload: str) -> None:
-        if payload == job_id:
-            wakeup.set()
-
-    async with db.pool.acquire() as conn:
-        await conn.add_listener(settings.database.notify_channel, on_notify)
-        try:
             while True:
-                wakeup.clear()
-
-                while True:
+                async with db.pool.acquire() as conn:
                     rows = await repository.fetch_results_after(
                         conn, job_id, cursor, limit=settings.stream.page_size
                     )
-                    if not rows:
-                        break
-                    cursor = rows[-1]["id"]
-                    payload = {
-                        "results": [repository.serialize_result(r) for r in rows]
-                    }
-                    yield _sse("results", payload, event_id=cursor)
+                if not rows:
+                    break
+                cursor = rows[-1]["id"]
+                payload = {"results": [repository.serialize_result(r) for r in rows]}
+                yield _sse("results", payload, event_id=cursor)
 
+            async with db.pool.acquire() as conn:
                 job = await repository.fetch_job(conn, job_id)
+            yield _sse(
+                "progress",
+                {"processed": job["processed_count"], "total": job["total_ips"]},
+            )
+
+            if job["status"] == "completed":
                 yield _sse(
-                    "progress",
-                    {"processed": job["processed_count"], "total": job["total_ips"]},
+                    "done", {"status": "completed", "total_ips": job["total_ips"]}
                 )
+                return
 
-                if job["status"] == "completed":
-                    yield _sse(
-                        "done", {"status": "completed", "total_ips": job["total_ips"]}
-                    )
-                    return
-
-                try:
-                    await asyncio.wait_for(
-                        wakeup.wait(), timeout=settings.stream.heartbeat_seconds
-                    )
-                except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
-        finally:
-            await conn.remove_listener(settings.database.notify_channel, on_notify)
+            try:
+                await asyncio.wait_for(
+                    wakeup.wait(), timeout=settings.stream.heartbeat_seconds
+                )
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"

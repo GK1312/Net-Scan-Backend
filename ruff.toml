@@ -1,0 +1,28 @@
+target-version = "py310"
+line-length = 100
+extend-exclude = [".venv"]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import ordering)
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+ignore = [
+    # Explicit try/except/pass around socket teardown reads clearly and is
+    # pervasive in the probes; not worth rewriting to contextlib.suppress.
+    "SIM105",
+]
+
+[lint.flake8-bugbear]
+# FastAPI uses callables (Body/Depends/Query) as argument defaults by design.
+extend-immutable-calls = ["fastapi.Body", "fastapi.Depends", "fastapi.Query"]
+
+[lint.per-file-ignores]
+# Tests reach into module internals and use long synthetic byte/packet literals.
+"tests/**" = ["E501", "E741"]

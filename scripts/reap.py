@@ -1,22 +1,25 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import asyncpg
 
 from src.config import get_settings
+from src.database import repository
 from src.database.connections import connection_kwargs
-
-SCHEMA_PATH = Path(__file__).resolve().parent.parent / "sql" / "schema.sql"
 
 
 async def main() -> None:
     settings = get_settings().database
     conn = await asyncpg.connect(**connection_kwargs(settings))
     try:
-        await conn.execute(SCHEMA_PATH.read_text())
-        print(f"applied schema from {SCHEMA_PATH}")
+        deleted = await repository.delete_expired_jobs(
+            conn, settings.result_retention_time_day
+        )
+        print(
+            f"reap: deleted {deleted} job(s) older than "
+            f"{settings.result_retention_time_day} day(s)"
+        )
     finally:
         await conn.close()
 

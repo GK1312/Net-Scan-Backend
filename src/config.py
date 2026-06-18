@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,17 +8,28 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class PhaseTimeouts(BaseModel):
     ping_timeout: float = 3.0
-    retries_limit: int = 3
-    retry_delay: float = 0.1
-    ping_stub_delay_seconds: float = 4.0
     tcp_connect_timeout: float = 2.0
+    # The port scan only needs open/closed/filtered, not a data exchange, so it
+    # uses a shorter connect timeout than the service probes. This is the main
+    # per-host cost (every host waits it out on its slowest filtered port); an
+    # open port on a LAN answers in <10ms, so this only bounds the "filtered"
+    # verdict. The gate-port recovery pass re-probes at tcp_connect_timeout.
+    port_connect_timeout: float = 1.0
+    # Per-attempt SMB read budget. SMB does connect + two NTLMSSP round-trips and
+    # retries once (see SMB_ATTEMPTS), so the effective ceiling is ~2x this.
+    smb_timeout: float = 4.0
+    # The phase-1 port scan fans out ~20 connects (filtered ports each burn
+    # tcp_connect_timeout); it needs more headroom than the generic per-probe
+    # budget or it gets cancelled wholesale under load -> no ports -> every gated
+    # probe (SMB, etc.) is skipped.
+    port_scan_timeout: float = 5.0
 
 
 class DatabaseSettings(BaseModel):
-    host: str = "89.167.16.30"
+    host: str = "localhost"
     port: int = 5432
-    user: str = "GK1312"
-    password: str = "Gauravsk@100"
+    user: str = "postgres"
+    password: str = ""
     database: str = "postgres"
     dsn: str | None = None
     pool_size: int = 50
@@ -39,8 +49,18 @@ class WorkerSettings(BaseModel):
     batch_size: int = 2_000
     chunk_size: int = 1_000
     max_connections: int = 25
+    # Worker-wide ceiling on concurrent outbound TCP connects (0 = unlimited).
+    # The port scan fans out ~20 connects per IP, so under big scans N_IPs x 20
+    # connects can storm the local stack and genuinely-open ports time out
+    # (mis-reported as filtered). Opt-in: set this ABOVE the worst-case live load
+    # — too low and slow dead-host connects hold every slot and starve live hosts.
+    max_concurrent_connections: int = 0
     rate_limit_per_pod: int = 1_000
     flush_interval_seconds: float = 1.0
+    max_retries: int = 3
+    thread_pool_size: int = 256
+    shutdown_grace_seconds: float = 30.0
+    enable_reverse_dns: bool = True
 
 
 class StreamSettings(BaseModel):
@@ -54,14 +74,21 @@ class SecuritySettings(BaseModel):
     jwt_algorithm: str = "HS256"
     jwt_expiration_seconds: int = 3_600
     min_confidence: float = 0.55
+    short_circuit_confidence: float = 90.0
+    api_key: str = ""
+    rate_limit_per_minute: int = 120
+    rate_limit_burst: int = 0
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="SCANNER_", env_nested_delimiter="__", extra="ignore"
+        env_prefix="SCANNER_",
+        env_nested_delimiter="__",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
     environment: str = "development"
-    config_dir: Path = Path("config.py")
 
     timeouts: PhaseTimeouts = Field(default_factory=PhaseTimeouts)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -70,11 +97,7 @@ class Settings(BaseSettings):
     stream: StreamSettings = Field(default_factory=StreamSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
 
-    @classmethod
-    def from_yaml(cls, path: Path) -> Settings:
-        raise NotImplementedError
 
-
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()

@@ -416,7 +416,9 @@ def _registry_vendor(oui: str) -> str | None:
         return None
     try:
         return EUI(f"{oui}:00:00:00").oui.registration().org
-    except (NotRegisteredError, Exception):
+    except NotRegisteredError:
+        return None
+    except Exception:
         return None
 
 

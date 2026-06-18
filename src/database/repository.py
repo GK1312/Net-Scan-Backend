@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 from uuid import UUID
 
 import asyncpg
@@ -14,9 +15,6 @@ Querier = Any
 
 @dataclass(slots=True)
 class ResultRow:
-    """One persisted fingerprint: a few derived scalar columns (for SQL-level
-    filtering) plus the full scan document stored as JSONB."""
-
     ip: str
     status: str
     latency_ms: float | None
@@ -152,3 +150,17 @@ async def notify_results(conn: asyncpg.Connection, job_id: UUID | str) -> None:
 def serialize_result(record: asyncpg.Record) -> dict[str, Any]:
     # The full scan_ip() document (jsonb decoded to a dict by the connection codec).
     return record["document"]
+
+
+async def delete_expired_jobs(db: Querier, retention_days: int) -> int:
+    return await db.fetchval(
+        """
+        WITH deleted AS (
+            DELETE FROM jobs
+            WHERE created_at < now() - make_interval(days => $1)
+            RETURNING 1
+        )
+        SELECT count(*) FROM deleted
+        """,
+        retention_days,
+    )

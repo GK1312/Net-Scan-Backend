@@ -64,7 +64,7 @@ def _poke(ip: str) -> None:
 
 def _on_link(ip: str, local: dict[str, str]) -> bool:
     if not local:
-        return True
+        return False
     target = _net24(ip)
     return any(_net24(local_ip) == target for local_ip in local)
 

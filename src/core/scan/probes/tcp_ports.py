@@ -31,21 +31,25 @@ DEFAULT_PORTS: tuple[int, ...] = (
 
 
 async def run(ctx: ProbeContext) -> TcpPortsResult:
-    timeout = ctx.timeouts.tcp_connect_timeout
-    states = await asyncio.gather(
-        *(_probe_port(ctx.ip, port, timeout) for port in DEFAULT_PORTS)
-    )
+    timeout = ctx.timeouts.port_connect_timeout
+    states = await probe_ports(ctx, DEFAULT_PORTS, timeout)
     buckets: dict[str, list[int]] = {"open": [], "filtered": [], "closed": []}
-    for port, state in zip(DEFAULT_PORTS, states):
-        buckets[state].append(port)
+    for port in DEFAULT_PORTS:
+        buckets[states[port]].append(port)
     return TcpPortsResult(probed=list(DEFAULT_PORTS), **buckets)
 
 
-async def _probe_port(ip: str, port: int, timeout: float) -> str:
+async def probe_ports(
+    ctx: ProbeContext, ports: tuple[int, ...] | list[int], timeout: float
+) -> dict[int, str]:
+    """Connect-scan each port concurrently, returning {port: open|closed|filtered}."""
+    states = await asyncio.gather(*(_probe_port(ctx, p, timeout) for p in ports))
+    return dict(zip(ports, states, strict=True))
+
+
+async def _probe_port(ctx: ProbeContext, port: int, timeout: float) -> str:
     try:
-        _, writer = await asyncio.wait_for(
-            asyncio.open_connection(ip, port), timeout=timeout
-        )
+        _, writer = await ctx.open_connection(port, timeout)
     except asyncio.TimeoutError:
         return "filtered"
     except ConnectionRefusedError:

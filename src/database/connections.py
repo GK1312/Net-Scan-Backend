@@ -5,8 +5,20 @@ from typing import cast
 
 import asyncpg
 
-from src.exceptions import DatabaseError
 from src.config import DatabaseSettings
+from src.exceptions import DatabaseError
+
+
+def connection_kwargs(settings: DatabaseSettings) -> dict:
+    if settings.dsn:
+        return {"dsn": settings.dsn}
+    return {
+        "host": settings.host,
+        "port": settings.port,
+        "user": settings.user,
+        "password": settings.password,
+        "database": settings.database,
+    }
 
 
 async def _init_connection(conn: asyncpg.Connection) -> None:
@@ -29,23 +41,13 @@ class DatabaseConnection:
     async def connect(self) -> None:
         if self._pool is not None:
             return
-        if self.settings.dsn:
-            connect_kwargs = {"dsn": self.settings.dsn}
-        else:
-            connect_kwargs = {
-                "host": self.settings.host,
-                "port": self.settings.port,
-                "user": self.settings.user,
-                "password": self.settings.password,
-                "database": self.settings.database,
-            }
         self._pool = cast(
             asyncpg.Pool,
             await asyncpg.create_pool(
                 min_size=1,
                 max_size=self.settings.pool_size,
                 init=_init_connection,
-                **connect_kwargs,
+                **connection_kwargs(self.settings),
             ),
         )
 

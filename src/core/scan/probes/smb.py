@@ -8,6 +8,9 @@ from src.core.scan.models import SmbResult
 from src.core.scan.os_hints import win_version_name
 
 SMB_PORT = 445
+# One retry: SMB handshakes drop transiently (reset / lost packet) on busy hosts.
+# The runner sizes SMB's per-probe budget to cover SMB_ATTEMPTS reads.
+SMB_ATTEMPTS = 2
 
 _DIALECTS: dict[int, str] = {
     0x0202: "SMB 2.0.2",
@@ -81,15 +84,29 @@ def _session_setup_packet(ntlmssp: bytes) -> bytes:
 
 
 async def run(ctx: ProbeContext) -> SmbResult:
-    timeout = ctx.timeouts.tcp_connect_timeout
+    connect_timeout = ctx.timeouts.tcp_connect_timeout
+    read_timeout = ctx.timeouts.smb_timeout
+    result = SmbResult()
+    for _ in range(SMB_ATTEMPTS):
+        result = await _attempt(ctx.ip, connect_timeout, read_timeout)
+        # Retry only a failed *connect* (transient). A successful connect is a
+        # terminal result whether or not SMB2 answered: a host that ignores the
+        # SMB2 negotiate (SMB1-only, e.g. XP/2003) won't answer on a retry either,
+        # and retrying would blow the per-probe time budget and lose the signal.
+        if result.probed:
+            break
+    return result
+
+
+async def _attempt(ip: str, connect_timeout: float, read_timeout: float) -> SmbResult:
     try:
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(ctx.ip, SMB_PORT), timeout=timeout
+            asyncio.open_connection(ip, SMB_PORT), timeout=connect_timeout
         )
     except (OSError, asyncio.TimeoutError):
-        return SmbResult()  # 445 not open -> SMB not probed
+        return SmbResult()  # 445 unreachable this attempt -> a retry may still win
     try:
-        return await _negotiate(reader, writer, timeout)
+        return await _negotiate(reader, writer, read_timeout)
     finally:
         writer.close()
 

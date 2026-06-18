@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 
+from src.core.scan import icmp_socket
 from src.core.scan.context import ProbeContext
 from src.core.scan.models import IcmpResult
 
@@ -13,8 +14,25 @@ _RTT_RE = re.compile(r"time[=<]\s*([\d.]+)\s*ms", re.IGNORECASE)
 
 
 async def run(ctx: ProbeContext) -> IcmpResult:
-    wait_ms = max(500, int((ctx.timeouts.ping_timeout - 0.5) * 1000))
-    out = await _ping(ctx.ip, wait_ms)
+    if icmp_socket.mode() != "subprocess":
+        reply = await icmp_socket.ping(
+            ctx.ip, timeout=max(0.5, ctx.timeouts.ping_timeout - 0.3)
+        )
+        if reply is None:
+            return IcmpResult()
+        ttl, rtt_ms = reply
+        return IcmpResult(
+            responded=True,
+            ttl_received=ttl,
+            ttl_estimated=_estimate_ttl(ttl) if ttl is not None else None,
+            rtt_ms=rtt_ms,
+        )
+    return await _subprocess_ping(ctx.ip, ctx.timeouts.ping_timeout)
+
+
+async def _subprocess_ping(ip: str, ping_timeout: float) -> IcmpResult:
+    wait_ms = max(500, int((ping_timeout - 0.5) * 1000))
+    out = await _ping(ip, wait_ms)
     if out is None:
         return IcmpResult()
 

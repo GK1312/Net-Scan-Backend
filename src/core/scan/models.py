@@ -115,6 +115,10 @@ class TelnetResult(BaseModel):
     banner: str | None = None
 
 
+class RevDnsResult(BaseModel):
+    hostname: str | None = None
+
+
 class Probes(BaseModel):
     icmp: IcmpResult = Field(default_factory=IcmpResult)
     tcp_ports: TcpPortsResult = Field(default_factory=TcpPortsResult)
@@ -133,6 +137,7 @@ class Probes(BaseModel):
     rtsp: RtspResult = Field(default_factory=RtspResult)
     arp: ArpResult = Field(default_factory=ArpResult)
     telnet: TelnetResult = Field(default_factory=TelnetResult)
+    revdns: RevDnsResult = Field(default_factory=RevDnsResult)
 
 
 class Classification(BaseModel):
